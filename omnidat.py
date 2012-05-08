@@ -8,7 +8,7 @@ import re
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', metavar='FILE')
-parser.add_argument('action', metavar='ACTION', default="LIST")
+parser.add_argument('action', metavar='ACTION', default="LIST", nargs="?")
 
 
 def print_datum(datum, keys):
