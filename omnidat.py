@@ -15,7 +15,10 @@ def print_datum(datum, keys):
     items = list(datum.items())
     if keys:
         items.sort(key=lambda _: keys.index(_[0]))
-    print(', '.join(': '.join((k, str(v))) for (k, v) in items if not k.startswith('_') or k in keys))
+    if len(keys) > 1 or not keys:
+        print(', '.join(': '.join((k, str(v))) for (k, v) in items if not k.startswith('_') or k in keys))
+    else:
+        print(datum[keys[0]])
 
 def main(argv):
     args, rest = parser.parse_known_args(argv[1:])
