@@ -15,7 +15,7 @@ def print_datum(datum, keys):
     items = list(datum.items())
     if keys:
         items.sort(key=lambda _: keys.index(_[0]))
-    print(', '.join(': '.join((k, v)) for (k, v) in items))
+    print(', '.join(': '.join((k, str(v))) for (k, v) in items if not k.startswith('_') or k in keys))
 
 def main(argv):
     args, rest = parser.parse_known_args(argv[1:])
@@ -43,11 +43,20 @@ def do_LIST(args, *rest):
             if approved:
                 if keys:
                     linedata = dict((k, v) for (k, v) in linedata.items() if k in keys)
-                print_datum(linedata, keys)
+                if linedata:
+                    print_datum(linedata, keys)
 
 def do_ADD(args, *rest):
+    rest = list(rest)
+    with open(args.filename) as f:
+        item_count = len(list(f))
     with open(args.filename, 'a') as f:
-        data = dict(item.split('=', 1) for item in rest)
+        data = {}
+        while rest:
+            k = rest.pop(0)
+            v = rest.pop(0)
+            data[k] = v
+        data['_id'] = item_count
         f.write(json.dumps(data))
         f.write('\n')
 
