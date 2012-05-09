@@ -24,7 +24,7 @@ def main(argv):
     args, rest = parser.parse_known_args(argv[1:])
     return globals()["do_" + args.action.upper()](args, *rest) or 0
 
-def do_LIST(args, *rest): 
+def _filter(args, *rest):
     rest = list(rest)
     filters = None
     keys = []
@@ -47,7 +47,20 @@ def do_LIST(args, *rest):
                 if keys:
                     linedata = dict((k, v) for (k, v) in linedata.items() if k in keys)
                 if linedata:
-                    print_datum(linedata, keys)
+                    yield (linedata, keys)
+
+def do_LIST(args, *rest): 
+    for linedata, keys in _filter(args, *rest):
+        print_datum(linedata, keys)
+
+def do_TRIM(args, *rest):
+    remove = []
+    for linedata, keys in _filter(args, *rest):
+        keep.append(linedata)
+    with open(args.filename, 'w') as f:
+        for linedata in keep:
+            f.write(json.dumps(linedata))
+            f.write('\n')
 
 def do_ADD(args, *rest):
     rest = list(rest)
