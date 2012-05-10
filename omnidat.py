@@ -12,7 +12,7 @@ parser.add_argument('filename', metavar='FILE')
 parser.add_argument('action', metavar='ACTION', default="LIST", nargs="?")
 
 R_KEY = r'(\w+)'
-R_DELIM = r'([+=:/\\])?'
+R_DELIM = r'([\^+=:/\\])?'
 # quoted or non-quoted values, adapted from
 # http://mail.python.org/pipermail/tutor/2003-December/027063.html
 R_VALUE = r'((?:"[^"]*\\(?:.[^"]*\\)*.[^"]*")|(?:"[^"]*")|\w+|(?:\'[^\']*\\(?:.[^\']*\\)*.[^\']*\')|(?:\'[^\']*\'))?'
@@ -85,11 +85,11 @@ class OmFilter(object):
             ok = True
             for k, v in keys.items():
                 if filter:
-                    if line[k] != v:
+                    if line.get(k) != v:
                         ok = False
                         break
                 else:
-                    if line[k] == v:
+                    if line.get(k) == v:
                         ok = False
                         break
             if ok:
@@ -101,16 +101,10 @@ class OmFilter(object):
         return excluded
 
     def filter(self, **keys):
-        filters = {}
-        filters.update(self.filters)
-        filters.update(keys)
-        return type(self)(self.of, filters, self.excludes)
+        return type(self)(self, keys, self.excludes)
 
     def exclude(self, **keys):
-        excludes = {}
-        excludes.update(self.excludes)
-        excludes.update(keys)
-        return type(self)(self.of, self.filters, excludes)
+        return type(self)(self, self.filters, keys)
  
 
 def print_datum(datum, keys):
@@ -126,45 +120,18 @@ def main(argv):
     args, rest = parser.parse_known_args(argv[1:])
     return globals()["do_" + args.action.upper()](args, *rest) or 0
 
-def _filter(args, *rest, negate=False):
-    rest = list(rest)
-    filters = None
-    keys = []
-    if rest:
-        while rest and '=' not in rest[0]:
-            keys.append(rest.pop(0))
-        filters = dict(item.split('=', 1) for item in rest)
-    with open(args.filename) as f:
-        for line in f:
-            linedata = json.loads(line)
-            approved = False
-            if filters:
-                approved = True
-                for fkey, fvalue in filters.items():
-                    if linedata.get(fkey) != fvalue:
-                        approved = False
-            else:
-                approved = True
-            if negate:
-                approved = not approved
-            if approved:
-                if keys:
-                    linedata = dict((k, v) for (k, v) in linedata.items() if k in keys)
-                if linedata:
-                    yield (linedata, keys)
-
-def _filter_and_save(args, *rest, negate=False):
-    keep = []
-    for linedata, keys in _filter(args, *rest, negate=negate):
-        keep.append(linedata)
-    with open(args.filename, 'w') as f:
-        for linedata in keep:
-            f.write(json.dumps(linedata))
-            f.write('\n')
 
 def do_LIST(args, *rest): 
-    for linedata, keys in _filter(args, *rest):
-        print_datum(linedata, keys)
+    om = OmFile(args.filename)
+    for f in rest:
+        key, delim, value = R_DATA.match(f).groups()
+        value = literal_eval(value)
+        if delim == '=':
+            om = om.filter(**{key: value})
+        elif delim == '^':
+            om = om.exclude(**{key: value})
+    for line in om:
+        print_datum(line, [])
 
 def do_TRIM(args, *rest):
     _filter_and_save(args, *rest, negate=False)
@@ -173,19 +140,17 @@ def do_REM(args, *rest):
     _filter_and_save(args, *rest, negate=True)
 
 def do_ADD(args, *rest):
-    rest = list(rest)
-    with open(args.filename) as f:
-        item_count = len(list(f))
-    with open(args.filename, 'a') as f:
-        data = {}
-        while rest:
-            k = rest.pop(0)
-            v = rest.pop(0)
-            data[k] = v
-        data['_id'] = item_count
-        f.write(json.dumps(data))
-        f.write('\n')
-
+    om = OmFile(args.filename)
+    data = []
+    for f in rest:
+        key, delim, value = f.partition('=')
+        assert delim == '=', "Can only add with =, not {}".format(repr(delim))
+        try:
+            value = literal_eval(value)
+        except SyntaxError:
+            pass
+        data.append({key: value})
+    om.add(*data)
 
 if __name__ == '__main__':
     sys.exit(main(sys.argv))
