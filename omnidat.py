@@ -43,12 +43,10 @@ class OmFile(object):
 
     def _prepare_pair(self, k, value):
         if isinstance(value, (int, bool, str)):
-            yield k
-            yield repr(value)
+            yield '{}={}'.format(k, repr(value))
         elif isinstance(value, list):
             for each_value in value:
-                yield k
-                yield repr(each_value)
+                yield '{}={}'.format(k, repr(each_value))
 
     def _decode_line(self, line):
         data = {}
@@ -59,7 +57,7 @@ class OmFile(object):
                     data[key].append
                 except AttributeError:
                     data[key] = [data[key]]
-                data.append(value)
+                data[key].append(value)
             else:
                 data[key] = value
         return data
