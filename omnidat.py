@@ -2,9 +2,9 @@
 
 import sys
 import argparse
-import json
 import re
 import shlex
+from ast import literal_eval
 
 
 parser = argparse.ArgumentParser()
@@ -52,6 +52,7 @@ class OmFile(object):
         data = {}
         terms = R_DATA.findall(line)
         for key, delim, value, *_ in terms:
+            value = literal_eval(value)
             if key in data:
                 try:
                     data[key].append
