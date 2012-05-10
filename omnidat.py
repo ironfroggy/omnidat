@@ -30,9 +30,12 @@ class OmFile(object):
             for line in f:
                 yield self._decode_line(line)
 
-    def append(self, data):
+    def add(self, *data):
         with open(self.filename, 'a') as f:
-            f.write(self._encode_line(data))
+            for line in data[:-1]:
+                f.write(self._encode_line(line))
+                f.write(' ')
+            f.write(self._encode_line(data[-1]))
             f.write('\n')
 
     def _encode_line(self, data):
