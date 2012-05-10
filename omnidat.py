@@ -4,12 +4,66 @@ import sys
 import argparse
 import json
 import re
+import shlex
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('filename', metavar='FILE')
 parser.add_argument('action', metavar='ACTION', default="LIST", nargs="?")
 
+R_KEY = r'(\w+)'
+R_DELIM = r'([+=:/\\])?'
+# quoted or non-quoted values, adapted from
+# http://mail.python.org/pipermail/tutor/2003-December/027063.html
+R_VALUE = r'((?:"[^"]*\\(?:.[^"]*\\)*.[^"]*")|(?:"[^"]*")|\w+|(?:\'[^\']*\\(?:.[^\']*\\)*.[^\']*\')|(?:\'[^\']*\'))?'
+
+R_DATA = re.compile('{}{}{}'.format(R_KEY, R_DELIM, R_VALUE))
+
+
+class OmFile(object):
+
+    def __init__(self, filename):
+        self.filename = filename
+
+    def __iter__(self):
+        with open(self.filename, 'r') as f:
+            for line in f:
+                yield self._decode_line(line)
+
+    def append(self, data):
+        with open(self.filename, 'a') as f:
+            f.write(self._encode_line(data))
+            f.write('\n')
+
+    def _encode_line(self, data):
+        terms = []
+        for (k, v) in data.items():
+            terms.extend(self._prepare_pair(k, v))
+        return ' '.join(terms)
+
+    def _prepare_pair(self, k, value):
+        if isinstance(value, (int, bool, str)):
+            yield k
+            yield repr(value)
+        elif isinstance(value, list):
+            for each_value in value:
+                yield k
+                yield repr(each_value)
+
+    def _decode_line(self, line):
+        data = {}
+        terms = R_DATA.findall(line)
+        for key, delim, value, *_ in terms:
+            if key in data:
+                try:
+                    data[key].append
+                except AttributeError:
+                    data[key] = [data[key]]
+                data.append(value)
+            else:
+                data[key] = value
+        return data
+ 
 
 def print_datum(datum, keys):
     items = list(datum.items())
@@ -24,7 +78,7 @@ def main(argv):
     args, rest = parser.parse_known_args(argv[1:])
     return globals()["do_" + args.action.upper()](args, *rest) or 0
 
-def _filter(args, *rest):
+def _filter(args, *rest, negate=False):
     rest = list(rest)
     filters = None
     keys = []
@@ -43,24 +97,32 @@ def _filter(args, *rest):
                         approved = False
             else:
                 approved = True
+            if negate:
+                approved = not approved
             if approved:
                 if keys:
                     linedata = dict((k, v) for (k, v) in linedata.items() if k in keys)
                 if linedata:
                     yield (linedata, keys)
 
-def do_LIST(args, *rest): 
-    for linedata, keys in _filter(args, *rest):
-        print_datum(linedata, keys)
-
-def do_TRIM(args, *rest):
-    remove = []
-    for linedata, keys in _filter(args, *rest):
+def _filter_and_save(args, *rest, negate=False):
+    keep = []
+    for linedata, keys in _filter(args, *rest, negate=negate):
         keep.append(linedata)
     with open(args.filename, 'w') as f:
         for linedata in keep:
             f.write(json.dumps(linedata))
             f.write('\n')
+
+def do_LIST(args, *rest): 
+    for linedata, keys in _filter(args, *rest):
+        print_datum(linedata, keys)
+
+def do_TRIM(args, *rest):
+    _filter_and_save(args, *rest, negate=False)
+
+def do_REM(args, *rest):
+    _filter_and_save(args, *rest, negate=True)
 
 def do_ADD(args, *rest):
     rest = list(rest)
