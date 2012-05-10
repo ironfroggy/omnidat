@@ -30,6 +30,12 @@ class OmFile(object):
             for line in f:
                 yield self._decode_line(line)
 
+    def filter(self, *args, **kwargs):
+        return OmFilter(self).filter(*args, **kwargs)
+
+    def exclude(self, *args, **kwargs):
+        return OmFilter(self).exclude(*args, **kwargs)
+
     def add(self, *data):
         with open(self.filename, 'a') as f:
             for line in data[:-1]:
@@ -65,6 +71,46 @@ class OmFile(object):
             else:
                 data[key] = value
         return data
+
+
+class OmFilter(object):
+
+    def __init__(self, of, filters=None, excludes=None):
+        self.of = of
+        self.filters = filters or {}
+        self.excludes = excludes or {}
+
+    def _filter_or_exclude(self, src, filter, keys):
+        for line in src:
+            ok = True
+            for k, v in keys.items():
+                if filter:
+                    if line[k] != v:
+                        ok = False
+                        break
+                else:
+                    if line[k] == v:
+                        ok = False
+                        break
+            if ok:
+                yield line
+
+    def __iter__(self):
+        filtered = self._filter_or_exclude(self.of, True, self.filters)
+        excluded = self._filter_or_exclude(filtered, False, self.excludes)
+        return excluded
+
+    def filter(self, **keys):
+        filters = {}
+        filters.update(self.filters)
+        filters.update(keys)
+        return type(self)(self.of, filters, self.excludes)
+
+    def exclude(self, **keys):
+        excludes = {}
+        excludes.update(self.excludes)
+        excludes.update(keys)
+        return type(self)(self.of, self.filters, excludes)
  
 
 def print_datum(datum, keys):
