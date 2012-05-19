@@ -11,7 +11,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('filename', metavar='FILE')
 parser.add_argument('action', metavar='ACTION', default="LIST", nargs="?")
 
-R_KEY = r'(\w+)'
+R_KEY = r'([\w\-]+)'
 R_DELIM = r'([\^+=:/\\])?'
 # quoted or non-quoted values, adapted from
 # http://mail.python.org/pipermail/tutor/2003-December/027063.html
@@ -28,7 +28,9 @@ class OmFile(object):
     def __iter__(self):
         with open(self.filename, 'r') as f:
             for line in f:
-                yield self._decode_line(line)
+                data = self._decode_line(line)
+                if data:
+                    yield data
 
     def filter(self, *args, **kwargs):
         return OmFilter(self).filter(*args, **kwargs)
@@ -61,7 +63,10 @@ class OmFile(object):
         data = {}
         terms = R_DATA.findall(line)
         for key, delim, value, *_ in terms:
-            value = literal_eval(value)
+            try:
+                value = literal_eval(value)
+            except (ValueError, SyntaxError):
+                raise ValueError("Cannot parse value %r" % (value,))
             if key in data:
                 try:
                     data[key].append
@@ -125,7 +130,10 @@ def do_LIST(args, *rest):
     om = OmFile(args.filename)
     for f in rest:
         key, delim, value = R_DATA.match(f).groups()
-        value = literal_eval(value)
+        try:
+            value = literal_eval(value)
+        except (ValueError, SyntaxError):
+            pass
         if delim == '=':
             om = om.filter(**{key: value})
         elif delim == '^':
@@ -147,6 +155,8 @@ def do_ADD(args, *rest):
         assert delim == '=', "Can only add with =, not {}".format(repr(delim))
         try:
             value = literal_eval(value)
+        except ValueError:
+            pass
         except SyntaxError:
             pass
         data.append({key: value})
