@@ -7,9 +7,7 @@ import shlex
 from ast import literal_eval
 
 
-parser = argparse.ArgumentParser()
-parser.add_argument('filename', metavar='FILE')
-parser.add_argument('action', metavar='ACTION', default="LIST", nargs="?")
+# Constants
 
 R_KEY = r'([\w\-]+)'
 R_DELIM = r'([\^+=:/\\])?'
@@ -19,6 +17,76 @@ R_VALUE = r'((?:"[^"]*\\(?:.[^"]*\\)*.[^"]*")|(?:"[^"]*")|\w+|(?:\'[^\']*\\(?:.[
 
 R_DATA = re.compile('{}{}{}'.format(R_KEY, R_DELIM, R_VALUE))
 
+
+# Command line processing
+
+from straight.command import Command, Option, SubCommand
+
+class Omnidat(Command):
+    filename = Option(dest='filename', action='store')
+
+    class List(Command):
+        rest = Option(dest='rest', default=list, action='append')
+
+        def execute(self, **extra):
+            om = OmFile(self.args.filename)
+            for f in self.args.rest:
+                key, delim, value = R_DATA.match(f).groups()
+                try:
+                    value = literal_eval(value)
+                except (ValueError, SyntaxError):
+                    pass
+                if delim == '=':
+                    om = om.filter(**{key: value})
+                elif delim == '^':
+                    om = om.exclude(**{key: value})
+            for line in om:
+                print_datum(line, [])
+
+    class Add(Command):
+        rest = Option(dest='rest', default=list, action='append')
+
+        def execute(self, **extra):
+            om = OmFile(self.args.filename)
+            data = []
+            for f in self.args.rest:
+                key, delim, value = f.partition('=')
+                assert delim == '=', "Can only add with =, not {}".format(repr(delim))
+                try:
+                    value = literal_eval(value)
+                except ValueError:
+                    pass
+                except SyntaxError:
+                    pass
+                data.append({key: value})
+            om.add(*data)
+
+    class Trim(Command):
+        rest = Option(dest='rest', default=list, action='append')
+
+        def execute(self, **extra):
+            print("TRIM not implemented yet")
+
+    class Remove(Command):
+        rest = Option(dest='rest', default=list, action='append')
+
+        def execute(self, **extra):
+            print("REMOVE not implemented yet")
+
+
+# Utilities
+
+def print_datum(datum, keys):
+    items = list(datum.items())
+    if keys:
+        items.sort(key=lambda _: keys.index(_[0]))
+    if len(keys) > 1 or not keys:
+        print(', '.join(': '.join((k, str(v))) for (k, v) in items if not k.startswith('_') or k in keys))
+    else:
+        print(datum[keys[0]])
+
+
+# Core
 
 class OmFile(object):
 
@@ -112,55 +180,5 @@ class OmFilter(object):
         return type(self)(self, self.filters, keys)
  
 
-def print_datum(datum, keys):
-    items = list(datum.items())
-    if keys:
-        items.sort(key=lambda _: keys.index(_[0]))
-    if len(keys) > 1 or not keys:
-        print(', '.join(': '.join((k, str(v))) for (k, v) in items if not k.startswith('_') or k in keys))
-    else:
-        print(datum[keys[0]])
-
-def main(argv):
-    args, rest = parser.parse_known_args(argv[1:])
-    return globals()["do_" + args.action.upper()](args, *rest) or 0
-
-
-def do_LIST(args, *rest): 
-    om = OmFile(args.filename)
-    for f in rest:
-        key, delim, value = R_DATA.match(f).groups()
-        try:
-            value = literal_eval(value)
-        except (ValueError, SyntaxError):
-            pass
-        if delim == '=':
-            om = om.filter(**{key: value})
-        elif delim == '^':
-            om = om.exclude(**{key: value})
-    for line in om:
-        print_datum(line, [])
-
-def do_TRIM(args, *rest):
-    _filter_and_save(args, *rest, negate=False)
-
-def do_REM(args, *rest):
-    _filter_and_save(args, *rest, negate=True)
-
-def do_ADD(args, *rest):
-    om = OmFile(args.filename)
-    data = []
-    for f in rest:
-        key, delim, value = f.partition('=')
-        assert delim == '=', "Can only add with =, not {}".format(repr(delim))
-        try:
-            value = literal_eval(value)
-        except ValueError:
-            pass
-        except SyntaxError:
-            pass
-        data.append({key: value})
-    om.add(*data)
-
 if __name__ == '__main__':
-    sys.exit(main(sys.argv))
+    Omnidat().run(sys.argv[1:])
