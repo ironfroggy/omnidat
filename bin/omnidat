@@ -1,0 +1,5 @@
+#!/usr/bin/env python
+
+import omnidat
+if __name__ == '__main__':
+    omnidat.Omnidat().run()
