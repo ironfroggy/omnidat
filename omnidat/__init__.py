@@ -20,6 +20,8 @@ R_DATA = re.compile('{}{}{}'.format(R_KEY, R_DELIM, R_VALUE))
 
 # Command line processing
 
+# why is this needed in Python 3?
+import pkg_resources
 from straight.command import Command, Option, SubCommand
 
 class Omnidat(Command):
